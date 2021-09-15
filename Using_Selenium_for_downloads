@@ -1,0 +1,89 @@
+import time
+import os
+from pathlib import Path
+import selenium
+import glob
+import csv
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver import Chrome
+from datetime import date
+
+driver = webdriver.Chrome('C:/Users/robert.enright/chromedriver')  # Optional argument, if not specified will search path.
+username = "username" # Use your own detials
+password = "password"
+
+driver.get('http://' + username + ':' + password + '@' + 'useyourownwebsite.com')
+
+# driver.find_element_by_xpath(" //input[@value='I']").click()
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/div[1]/table/tbody/tr[5]/td[2]/label[2]/input').click()         # De-select In Progress PEMs
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/div[1]/table/tbody/tr[8]/td[1]/select/option[6]').click()       # Select Imms PEMs
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/input[1]').click()              # Search the PEMs
+
+driver.implicitly_wait(5)           # Wait for page to load
+driver.find_element_by_xpath('//*[@id="ExportToCSVID"]').click()        # Click export CSV file
+driver.switch_to.alert.accept()     # Accept pop up
+
+time.sleep(5)   # Give time for Sunset to generate the report
+
+iframe = driver.find_element_by_xpath('//*[@id="ExportToCSViFrame"]')   # NB - Identify the iFrame
+driver.switch_to.frame(iframe)                                          # Switch Driver to iFrame
+driver.find_element_by_xpath('/html/body/div[3]/a').click()             # Click to Download
+
+time.sleep(5)   # Give time for Sunset to generate the report
+
+# Get the file name
+folder_path = r'C:/Users/robert.enright/Downloads'      # Path to Downloads
+file_type = '\*.csv'                                    # Csv files only
+files = glob.glob(folder_path + file_type)              # Use Glob to pull files
+new_pems_file = max(files, key=os.path.getmtime)    # We need the most recent file, ordered by date modifified
+
+# Return to home screen
+driver.find_element_by_xpath('/html/body/input').click()
+time.sleep(5)   # Give time for Sunset to generate the report
+driver.switch_to.default_content()      # Switch back to main content
+
+driver.get('http://sunset.vch.ca/sunset/pem_html.Main')
+
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/div[1]/table/tbody/tr[5]/td[2]/label[2]/input').click()         # De-select In Progress PEMs
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/div[1]/table/tbody/tr[5]/td[2]/label[1]/input').click()         # De-select New PEMs
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/div[1]/table/tbody/tr[5]/td[2]/input').click()                  # Select On Hold PEMs
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/div[1]/table/tbody/tr[8]/td[1]/select/option[6]').click()       # Select Imms PEMs
+driver.find_element_by_xpath('//*[@id="HeaderDiv"]/form/input[1]').click()              # Search the PEMs
+
+driver.implicitly_wait(5)           # Wait for page to load
+driver.find_element_by_xpath('//*[@id="ExportToCSVID"]').click()        # Click export CSV file
+driver.switch_to.alert.accept()     # Accept pop up
+
+time.sleep(5)
+
+iframe = driver.find_element_by_xpath('//*[@id="ExportToCSViFrame"]')   # NB - Identify the iFrame
+driver.switch_to.frame(iframe)                                          # Switch Driver to iFrame
+driver.find_element_by_xpath('/html/body/div[3]/a').click()
+
+time.sleep(5)   # Give time for Sunset to generate the report
+
+folder_path = r'C:/Users/robert.enright/Downloads'  # Path to Downloads
+file_type = '\*.csv'                                # Csv files only
+files = glob.glob(folder_path + file_type)          # Use Glob to pull files
+on_hold_pems_file = max(files, key=os.path.getmtime)    # We need the most recent file, ordered by date modifified
+
+# Names of the files are as such:
+print(new_pems_file)    
+print(on_hold_pems_file)
+
+# Create DF for New dataset
+df_new = pd.read_csv(new_pems_file, index_col=False)        # DF for new pems
+df_new = df_new.rename(columns={'Message':'Status'})                 # Rename the Message column
+df_new['Status'] = 'New'                                    # Change the values to new
+
+# Create DF for On Hold dataset
+df_on_hold = pd.read_csv(on_hold_pems_file, index_col=False)    # DF for on hold pems
+df_on_hold = df_on_hold.rename(columns={'Message':'Status'})             # Rename the message column
+df_on_hold['Status'] = 'On Hold'                            # Change the values to hold
+
+df_entire = df_new.append(df_on_hold, sort=False)    # Append on hold details to the new pems dataset, ignore original indexing
+
+print(str(date.today()))
+
+df_entire.to_csv('C:/Users/robert.enright/PEMS_Marco/Inputs/pems_data_' + str(date.today()) + '.csv', index=False)
